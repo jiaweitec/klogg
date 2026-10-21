@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <exception>
 #include <memory>
+#include <QStringList>
 #include <qregularexpression.h>
 #include <string>
 #include <variant>
@@ -108,6 +109,11 @@ parseBooleanExpressions( QString& pattern, bool isCaseSensitive, bool isPlainTex
     return subPatterns;
 }
 
+QString joinTerms( const QStringList& terms )
+{
+    return "(" + terms.join( " or " ) + ")";
+}
+
 } // namespace
 
 RegularExpression::RegularExpression( const RegularExpressionPattern& pattern )
@@ -116,7 +122,51 @@ RegularExpression::RegularExpression( const RegularExpressionPattern& pattern )
     , expression_( pattern.pattern )
 {
     try {
-        if ( pattern.isBoolean ) {
+        if ( pattern.hasActiveConditions() ) {
+            isInverse_ = false;
+            isBooleanCombination_ = true;
+
+            QStringList includes;
+            QStringList excludes;
+            if ( !pattern.pattern.isEmpty() ) {
+                QString mainExpression = pattern.pattern;
+                if ( pattern.isBoolean ) {
+                    const auto mainSubPatterns = parseBooleanExpressions(
+                        mainExpression, pattern.isCaseSensitive, pattern.isPlainText );
+                    subPatterns_.insert( subPatterns_.end(), mainSubPatterns.begin(),
+                                         mainSubPatterns.end() );
+                }
+                else {
+                    subPatterns_.emplace_back( pattern.pattern, pattern.isCaseSensitive, false,
+                                               false, pattern.isPlainText );
+                    mainExpression = QString::fromStdString( subPatterns_.back().id() );
+                }
+                ( pattern.isExclude ? excludes : includes ).append( "(" + mainExpression + ")" );
+            }
+
+            for ( const auto& condition : pattern.conditions ) {
+                if ( !condition.isEnabled || condition.pattern.isEmpty() ) {
+                    continue;
+                }
+                subPatterns_.emplace_back( condition.pattern, pattern.isCaseSensitive, false,
+                                           false, pattern.isPlainText );
+                ( condition.isExclude ? excludes : includes )
+                    .append( QString::fromStdString( subPatterns_.back().id() ) );
+            }
+
+            expression_ = includes.isEmpty() ? QString( "1" ) : joinTerms( includes );
+            if ( !excludes.isEmpty() ) {
+                expression_ += " and not" + joinTerms( excludes );
+            }
+
+            BooleanExpressionEvaluator evaluator{ expression_.toStdString(), subPatterns_ };
+            if ( !evaluator.isValid() ) {
+                isValid_ = false;
+                errorString_ = QString::fromStdString( evaluator.errorString() );
+                return;
+            }
+        }
+        else if ( pattern.isBoolean ) {
             subPatterns_ = parseBooleanExpressions( expression_, pattern.isCaseSensitive,
                                                     pattern.isPlainText );
 

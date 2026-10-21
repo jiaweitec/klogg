@@ -116,6 +116,10 @@ class Highlighter {
     HighlightColor color_;
 };
 
+klogg::vector<Highlighter> searchPatternHighlighters( const RegularExpressionPattern& pattern,
+                                                     const QColor& mainBackColor,
+                                                     bool variateColors );
+
 enum class HighlighterMatchType { NoMatch, WordMatch, LineMatch };
 
 // Represents an ordered set of filters to be applied to each line displayed.

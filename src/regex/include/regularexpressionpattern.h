@@ -21,12 +21,26 @@
 #define KLOGG_REGULAR_EXPRESSION_PATTERN_H
 
 #include <QRegularExpression>
+#include <algorithm>
 #include <QString>
 #include <cstdint>
 #include <qregularexpression.h>
 #include <string>
 
+#include "containers.h"
 #include "uuid.h"
+
+struct SearchCondition {
+    QString pattern;
+    bool isExclude = false;
+    bool isEnabled = true;
+
+    bool operator==( const SearchCondition& other ) const
+    {
+        return std::tie( pattern, isExclude, isEnabled )
+               == std::tie( other.pattern, other.isExclude, other.isEnabled );
+    }
+};
 
 struct RegularExpressionPattern {
 
@@ -36,6 +50,7 @@ struct RegularExpressionPattern {
     bool isBoolean = false;
     bool isPlainText = false;
     bool isPrefilter = false;
+    klogg::vector<SearchCondition> conditions;
 
     RegularExpressionPattern() = default;
 
@@ -53,6 +68,32 @@ struct RegularExpressionPattern {
         , isPlainText( plainText )
         , patternId_( nextId() )
     {
+    }
+
+    bool hasActiveConditions() const
+    {
+        return std::any_of( conditions.begin(), conditions.end(), []( const auto& c ) {
+            return c.isEnabled && !c.pattern.isEmpty();
+        } );
+    }
+
+    bool isEmpty() const
+    {
+        return pattern.isEmpty() && !hasActiveConditions();
+    }
+
+    klogg::vector<RegularExpressionPattern> includePatterns() const
+    {
+        klogg::vector<RegularExpressionPattern> includes;
+        if ( !pattern.isEmpty() && !isBoolean && !isExclude ) {
+            includes.emplace_back( pattern, isCaseSensitive, false, false, isPlainText );
+        }
+        for ( const auto& c : conditions ) {
+            if ( c.isEnabled && !c.isExclude && !c.pattern.isEmpty() ) {
+                includes.emplace_back( c.pattern, isCaseSensitive, false, false, isPlainText );
+            }
+        }
+        return includes;
     }
 
     std::string id() const
@@ -80,8 +121,9 @@ struct RegularExpressionPattern {
     bool operator==( const RegularExpressionPattern& other ) const
     {
         return std::tie( pattern, isCaseSensitive, isExclude, isBoolean, isPlainText )
-               == std::tie( other.pattern, other.isCaseSensitive, isExclude, isBoolean,
-                            isPlainText );
+                   == std::tie( other.pattern, other.isCaseSensitive, isExclude, isBoolean,
+                                isPlainText )
+               && conditions == other.conditions;
     }
 
   private:

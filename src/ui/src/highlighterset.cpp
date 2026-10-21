@@ -39,6 +39,7 @@
 // This file implements classes Highlighter and HighlighterSet
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <qcolor.h>
 #include <qnamespace.h>
@@ -227,6 +228,29 @@ bool Highlighter::matchLine( const QString& line, klogg::vector<HighlightedMatch
     }
 
     return ( !matches.empty() );
+}
+
+klogg::vector<Highlighter> searchPatternHighlighters( const RegularExpressionPattern& pattern,
+                                                     const QColor& mainBackColor,
+                                                     bool variateColors )
+{
+    static const std::array<QColor, 6> ConditionColors
+        = { QColor( "#ffd54f" ), QColor( "#81d4fa" ), QColor( "#a5d6a7" ),
+            QColor( "#f48fb1" ), QColor( "#ce93d8" ), QColor( "#ffab91" ) };
+
+    const auto hasConditions = pattern.hasActiveConditions();
+    klogg::vector<Highlighter> highlighters;
+    for ( const auto& include : pattern.includePatterns() ) {
+        const auto index = highlighters.size();
+        const auto backColor
+            = index == 0 ? mainBackColor : ConditionColors[ ( index - 1 ) % ConditionColors.size() ];
+        Highlighter highlighter{ include.pattern, !include.isCaseSensitive, true, Qt::black,
+                                 backColor };
+        highlighter.setUseRegex( !include.isPlainText );
+        highlighter.setVariateColors( variateColors && !hasConditions );
+        highlighters.push_back( std::move( highlighter ) );
+    }
+    return highlighters;
 }
 
 HighlighterSet HighlighterSet::createNewSet( const QString& name )

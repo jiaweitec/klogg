@@ -218,6 +218,9 @@ class LogFilteredData : public AbstractLogData {
             hash_combine( seed, std::get<0>( k ).isBoolean );
             hash_combine( seed, std::get<0>( k ).isCaseSensitive );
             hash_combine( seed, std::get<0>( k ).isExclude );
+            for ( const auto& c : std::get<0>( k ).conditions ) {
+                seed ^= qHash( c.pattern ) + ( c.isExclude ? 1u : 0u ) + ( c.isEnabled ? 2u : 0u );
+            }
             hash_combine( seed, std::get<1>( k ) );
             hash_combine( seed, std::get<2>( k ) );
             return seed;

@@ -90,7 +90,8 @@ public:
     // Construct from the value passsed
     CrawlerWidgetContext( QList<int> sizes, bool ignoreCase, bool autoRefresh, bool followFile,
                           bool useRegexp, bool inverseRegexp, bool useBooleanCombination,
-                          QList<LineNumber> markedLines )
+                          QList<LineNumber> markedLines,
+                          klogg::vector<SearchCondition> conditions )
         : sizes_( sizes )
         , ignoreCase_( ignoreCase )
         , autoRefresh_( autoRefresh )
@@ -98,6 +99,7 @@ public:
         , useRegexp_( useRegexp )
         , inverseRegexp_( inverseRegexp )
         , useBooleanCombination_( useBooleanCombination )
+        , conditions_( std::move( conditions ) )
     {
         std::transform( markedLines.cbegin(), markedLines.cend(), std::back_inserter( marks_ ),
                         []( const auto& m ) { return m.get(); } );
@@ -142,6 +144,11 @@ public:
         return marks_;
     }
 
+    klogg::vector<SearchCondition> conditions() const
+    {
+        return conditions_;
+    }
+
 private:
     void loadFromString( const QString& string );
     void loadFromJson( const QString& json );
@@ -157,6 +164,7 @@ private:
     bool useBooleanCombination_;
 
     QList<LineNumber::UnderlyingType> marks_;
+    klogg::vector<SearchCondition> conditions_;
 };
 
 // Constructor only does trivial construction. The real work is done once
@@ -356,6 +364,8 @@ void CrawlerWidget::doSetViewContext( const QString& view_context )
     const auto savedMarks = context.marks();
     std::transform( savedMarks.cbegin(), savedMarks.cend(), std::back_inserter( savedMarkedLines_ ),
                     []( const auto& l ) { return LineNumber( l ); } );
+
+    setSearchConditions( context.conditions() );
 }
 
 std::shared_ptr<const ViewContextInterface> CrawlerWidget::doGetViewContext() const
@@ -363,7 +373,7 @@ std::shared_ptr<const ViewContextInterface> CrawlerWidget::doGetViewContext() co
     auto context = std::make_shared<const CrawlerWidgetContext>(
         sizes(), ( !matchCaseButton_->isChecked() ), searchRefreshButton_->isChecked(),
         logMainView_->isFollowEnabled(), useRegexpButton_->isChecked(), inverseButton_->isChecked(),
-        booleanButton_->isChecked(), logFilteredData_->getMarks() );
+        booleanButton_->isChecked(), logFilteredData_->getMarks(), searchConditions() );
 
     return static_cast<std::shared_ptr<const ViewContextInterface>>( context );
 }
@@ -880,30 +890,83 @@ QString& CrawlerWidget::combinePatterns( QString& currentPattern, const QString&
 
 void CrawlerWidget::addToSearch( const QString& searchString )
 {
-    const auto newPattern = escapeSearchPattern( searchString );
-    QString currentPattern = searchLineEdit_->currentText();
-    setSearchPattern( combinePatterns( currentPattern, newPattern ) );
+    addSearchConditionFromView( searchString, false );
 }
 
 void CrawlerWidget::excludeFromSearch( const QString& searchString )
 {
-    QString currentPattern = searchLineEdit_->currentText();
+    addSearchConditionFromView( searchString, true );
+}
 
-    const auto wasInBooleanCombinationMode = booleanButton_->isChecked();
-    if ( !wasInBooleanCombinationMode ) {
-        currentPattern.replace( '"', "\"" ).prepend( '"' ).append( '"' );
+void CrawlerWidget::addSearchConditionFromView( const QString& searchString, bool isExclude )
+{
+    const auto pattern = useRegexpButton_->isChecked() ? QRegularExpression::escape( searchString )
+                                                       : searchString;
+    addSearchCondition( { pattern, isExclude, true } );
+
+    if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+        dispatchToMainThread( [ this ] { startNewSearch(); } );
     }
+}
 
-    booleanButton_->setChecked( true );
+void CrawlerWidget::addSearchCondition( const SearchCondition& condition )
+{
+    auto* row = new QWidget;
+    auto* enabled = new QCheckBox;
+    enabled->setToolTip( tr( "Enable condition" ) );
+    enabled->setChecked( condition.isEnabled );
+    auto* pattern = new QLineEdit( condition.pattern );
+    pattern->setPlaceholderText( tr( "Regular expression" ) );
+    auto* exclude = new QCheckBox( tr( "Exclude" ) );
+    exclude->setChecked( condition.isExclude );
+    auto* removeButton = new QToolButton;
+    removeButton->setText( "-" );
+    removeButton->setToolTip( tr( "Remove condition" ) );
+    removeButton->setAutoRaise( true );
 
-    const auto newPattern = escapeSearchPattern( searchString );
+    auto* layout = new QHBoxLayout( row );
+    layout->setContentsMargins( 2, 0, 2, 0 );
+    layout->addWidget( enabled );
+    layout->addWidget( pattern );
+    layout->addWidget( exclude );
+    layout->addWidget( removeButton );
 
-    if ( !currentPattern.isEmpty() ) {
-        currentPattern.append( " and " );
+    conditionsLayout_->addWidget( row );
+    conditionRows_.push_back( { row, pattern, exclude, enabled } );
+
+    connect( pattern, &QLineEdit::returnPressed, this, &CrawlerWidget::startNewSearch );
+    connect( removeButton, &QToolButton::clicked, this, [ this, row ] {
+        conditionRows_.erase( std::remove_if( conditionRows_.begin(), conditionRows_.end(),
+                                              [ row ]( const auto& r ) { return r.row == row; } ),
+                              conditionRows_.end() );
+        row->deleteLater();
+    } );
+
+    if ( condition.pattern.isEmpty() ) {
+        pattern->setFocus();
     }
+}
 
-    currentPattern.append( "not(" ).append( newPattern ).append( ')' );
-    setSearchPattern( currentPattern );
+klogg::vector<SearchCondition> CrawlerWidget::searchConditions() const
+{
+    klogg::vector<SearchCondition> conditions;
+    for ( const auto& r : conditionRows_ ) {
+        conditions.push_back(
+            { r.pattern->text(), r.exclude->isChecked(), r.enabled->isChecked() } );
+    }
+    return conditions;
+}
+
+void CrawlerWidget::setSearchConditions( const klogg::vector<SearchCondition>& conditions )
+{
+    for ( const auto& r : conditionRows_ ) {
+        r.row->deleteLater();
+    }
+    conditionRows_.clear();
+
+    for ( const auto& c : conditions ) {
+        addSearchCondition( c );
+    }
 }
 
 void CrawlerWidget::replaceSearch( const QString& searchString )
@@ -1124,6 +1187,16 @@ void CrawlerWidget::setup()
 
     predefinedFilters_ = new PredefinedFiltersComboBox( this );
 
+    addConditionButton_ = new QToolButton();
+    addConditionButton_->setText( "+" );
+    addConditionButton_->setToolTip( tr( "Add search condition" ) );
+    addConditionButton_->setAutoRaise( true );
+    addConditionButton_->setContentsMargins( 2, 2, 2, 2 );
+
+    conditionsLayout_ = new QVBoxLayout;
+    conditionsLayout_->setContentsMargins( 0, 0, 0, 0 );
+    conditionsLayout_->setSpacing( 0 );
+
     auto* searchLineLayout = new QHBoxLayout;
     searchLineLayout->setContentsMargins( 2, 2, 2, 2 );
 
@@ -1135,6 +1208,7 @@ void CrawlerWidget::setup()
     searchLineLayout->addWidget( searchRefreshButton_ );
     searchLineLayout->addWidget( predefinedFilters_ );
     searchLineLayout->addWidget( searchLineEdit_ );
+    searchLineLayout->addWidget( addConditionButton_ );
     searchLineLayout->addWidget( clearButton_ );
     searchLineLayout->addWidget( searchButton_ );
     searchLineLayout->addWidget( keepSearchResultsButton_ );
@@ -1150,6 +1224,7 @@ void CrawlerWidget::setup()
 
     auto* bottomMainLayout = new QVBoxLayout;
     bottomMainLayout->addLayout( searchLineLayout );
+    bottomMainLayout->addLayout( conditionsLayout_ );
     bottomMainLayout->addWidget( tabbedFilteredView_ );
     bottomMainLayout->setContentsMargins( 2, 2, 2, 2 );
     bottomWindow->setLayout( bottomMainLayout );
@@ -1197,6 +1272,8 @@ void CrawlerWidget::setup()
     connect( editSearchHistoryAction, &QAction::triggered, this,
              &CrawlerWidget::editSearchHistory );
     connect( searchButton_, &QToolButton::clicked, this, &CrawlerWidget::startNewSearch );
+    connect( addConditionButton_, &QToolButton::clicked, this,
+             [ this ] { addSearchCondition( {} ); } );
     connect( stopButton_, &QToolButton::clicked, this, &CrawlerWidget::stopSearch );
     connect( clearButton_, &QToolButton::clicked, searchLineEdit_, &QComboBox::clearEditText );
 
@@ -1588,12 +1665,12 @@ void CrawlerWidget::replaceCurrentSearch( const QString& searchText )
     // Update the match overview
     overview_.updateData( logData_->getNbLine() );
 
-    if ( !searchText.isEmpty() ) {
+    auto regexpPattern = RegularExpressionPattern(
+        searchText, matchCaseButton_->isChecked(), inverseButton_->isChecked(),
+        booleanButton_->isChecked(), !useRegexpButton_->isChecked() );
+    regexpPattern.conditions = searchConditions();
 
-        // Constructs the regexp
-        auto regexpPattern = RegularExpressionPattern(
-            searchText, matchCaseButton_->isChecked(), inverseButton_->isChecked(),
-            booleanButton_->isChecked(), !useRegexpButton_->isChecked() );
+    if ( !regexpPattern.isEmpty() ) {
 
         RegularExpression hsExpression{ regexpPattern };
         auto isValidExpression = hsExpression.isValid();
@@ -1869,7 +1946,7 @@ void CrawlerWidgetContext::loadFromString( const QString& string )
 
 void CrawlerWidgetContext::loadFromJson( const QString& json )
 {
-    const auto properties = QJsonDocument::fromJson( json.toLatin1() ).toVariant().toMap();
+    const auto properties = QJsonDocument::fromJson( json.toUtf8() ).toVariant().toMap();
 
     if ( properties.contains( "S" ) ) {
         const auto sizes = properties.value( "S" ).toList();
@@ -1908,6 +1985,16 @@ void CrawlerWidgetContext::loadFromJson( const QString& json )
             marks_.append( m.toUInt() );
         }
     }
+
+    if ( properties.contains( "SC" ) ) {
+        const auto conditions = properties.value( "SC" ).toList();
+        for ( const auto& c : conditions ) {
+            const auto condition = c.toMap();
+            conditions_.push_back( { condition.value( "P" ).toString(),
+                                     condition.value( "X" ).toBool(),
+                                     condition.value( "E", true ).toBool() } );
+        }
+    }
 }
 
 QString CrawlerWidgetContext::toString() const
@@ -1930,6 +2017,13 @@ QString CrawlerWidgetContext::toString() const
     properies[ "IR" ] = inverseRegexp_;
     properies[ "BC" ] = useBooleanCombination_;
     properies[ "M" ] = toVariantList( marks_ );
+
+    QVariantList conditions;
+    for ( const auto& c : conditions_ ) {
+        conditions.append( QVariantMap{
+            { "P", c.pattern }, { "X", c.isExclude }, { "E", c.isEnabled } } );
+    }
+    properies[ "SC" ] = conditions;
 
     return QJsonDocument::fromVariant( properies ).toJson( QJsonDocument::Compact );
 }

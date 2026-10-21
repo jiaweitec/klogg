@@ -54,12 +54,10 @@ bool generateDataFiles( QTemporaryFile& file )
     return true;
 }
 
-void runSearch( LogFilteredData* filtered_data, const QString& regexp,
+void runSearch( LogFilteredData* filtered_data, const RegularExpressionPattern& pattern,
                 SafeQSignalSpy& searchProgressSpy )
 {
-
-    QTimer::singleShot(
-        50, [ & ]() { filtered_data->runSearch( RegularExpressionPattern( regexp ) ); } );
+    QTimer::singleShot( 50, [ & ]() { filtered_data->runSearch( pattern ); } );
 
     int progress = 0;
     do {
@@ -235,7 +233,8 @@ SCENARIO( "search for regex", "[logdata]" )
             SafeQSignalSpy searchProgressSpy{ filtered_data.get(),
                                               &LogFilteredData::searchProgressed };
 
-            runSearch( filtered_data.get(), "this is line [0-9]{5}9", searchProgressSpy );
+            runSearch( filtered_data.get(), RegularExpressionPattern( "this is line [0-9]{5}9" ),
+                       searchProgressSpy );
 
             THEN( "Matched lines are in data" )
             {
@@ -249,6 +248,56 @@ SCENARIO( "search for regex", "[logdata]" )
                 for ( const auto& l : lines ) {
                     REQUIRE( l.endsWith( '9' ) );
                 }
+            }
+        }
+    }
+}
+
+SCENARIO( "search with conditions", "[logdata]" )
+{
+    LogDataLoader logDataLoader;
+
+    GIVEN( "loaded log data" )
+    {
+        auto filtered_data = logDataLoader.log_data.getNewFilteredData();
+
+        auto& config = Configuration::getSynced();
+        config.setSearchThreadPoolSize( 2 );
+        config.setUseParallelSearch( true );
+
+        SafeQSignalSpy searchProgressSpy{ filtered_data.get(),
+                                          &LogFilteredData::searchProgressed };
+
+        RegularExpressionPattern pattern( "line [0-9]{5}9" );
+        pattern.conditions = { { "line [0-9]{5}3", false, true },
+                               { "line 0000[0-9]{2}", true, true },
+                               { "line 000001", false, false } };
+
+        WHEN( "Searched with include and exclude conditions" )
+        {
+            runSearch( filtered_data.get(), pattern, searchProgressSpy );
+
+            THEN( "Matches are includes without excludes" )
+            {
+                const auto matches_count = filtered_data->getNbMatches();
+                REQUIRE( matches_count == 80_lcount );
+
+                const auto lines = filtered_data->getExpandedLines( 0_lnum, matches_count );
+                for ( const auto& l : lines ) {
+                    REQUIRE( ( l.endsWith( '9' ) || l.endsWith( '3' ) ) );
+                    REQUIRE_FALSE( l.contains( "line 0000" ) );
+                }
+            }
+        }
+
+        WHEN( "Exclude condition is disabled" )
+        {
+            pattern.conditions[ 1 ].isEnabled = false;
+            runSearch( filtered_data.get(), pattern, searchProgressSpy );
+
+            THEN( "Excluded lines are back" )
+            {
+                REQUIRE( filtered_data->getNbMatches() == 100_lcount );
             }
         }
     }
@@ -274,7 +323,8 @@ SCENARIO( "marks and matches in filtered log data", "[logdata]" )
             SafeQSignalSpy searchProgressSpy{ filtered_data.get(),
                                               &LogFilteredData::searchProgressed };
 
-            runSearch( filtered_data.get(), "this is line [0-9]{5}9", searchProgressSpy );
+            runSearch( filtered_data.get(), RegularExpressionPattern( "this is line [0-9]{5}9" ),
+                       searchProgressSpy );
 
             AND_WHEN( "Add marks at matched line" )
             {

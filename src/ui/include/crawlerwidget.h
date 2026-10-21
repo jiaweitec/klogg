@@ -45,6 +45,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QLineEdit>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
@@ -326,6 +327,10 @@ class CrawlerWidget : public QSplitter,
     void setup();
     void setShortcuts();
     void replaceCurrentSearch( const QString& searchText );
+    void addSearchCondition( const SearchCondition& condition );
+    void addSearchConditionFromView( const QString& searchString, bool isExclude );
+    klogg::vector<SearchCondition> searchConditions() const;
+    void setSearchConditions( const klogg::vector<SearchCondition>& conditions );
     void updateSearchCombo();
     AbstractLogView* activeView() const;
     void printSearchInfoMessage( LinesCount nbMatches = 0_lcount );
@@ -394,6 +399,17 @@ class CrawlerWidget : public QSplitter,
     QToolButton* inverseButton_;
     QToolButton* booleanButton_;
     QToolButton* searchRefreshButton_;
+
+    struct SearchConditionRow {
+        QWidget* row;
+        QLineEdit* pattern;
+        QCheckBox* exclude;
+        QCheckBox* enabled;
+    };
+
+    QToolButton* addConditionButton_;
+    QVBoxLayout* conditionsLayout_;
+    klogg::vector<SearchConditionRow> conditionRows_;
 
     std::map<QString, QShortcut*> shortcuts_;
 

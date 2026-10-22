@@ -343,7 +343,6 @@ class CrawlerWidget : public QSplitter,
     void reloadPredefinedFilters() const;
 
     QString escapeSearchPattern( const QString& searchPattern, bool isRegex = false ) const;
-    QString& combinePatterns( QString& currentPattern, const QString& newPattern ) const;
     void setSearchPattern( const QString& searchPattern );
 
     void resetStateOnSearchPatternChanges();

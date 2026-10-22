@@ -59,7 +59,16 @@ class PredefinedFiltersComboBox final : public QComboBox {
     PredefinedFiltersComboBox& operator=( PredefinedFiltersComboBox&& other ) = delete;
 
     void populatePredefinedFilters();
-    void updateSearchPattern( const QString newSearchPattern, bool useLogicalCombining );
+    void updateSearchPattern( const QString newSearchPattern, bool useRegexp,
+                              bool useLogicalCombining );
+
+    static QString filterSearchPattern( const PredefinedFilter& filter, bool useRegexp,
+                                        bool useLogicalCombining );
+    static QString combineFilters( const QList<PredefinedFilter>& filters, bool useRegexp,
+                                   bool useLogicalCombining );
+    static QList<int> matchingFilters( const QString& searchPattern,
+                                       const QList<PredefinedFilter>& filters, bool useRegexp,
+                                       bool useLogicalCombining );
 
     virtual void showPopup();
 
@@ -75,12 +84,9 @@ class PredefinedFiltersComboBox final : public QComboBox {
     PredefinedFiltersCollection filtersCollection_;
 
     QStandardItemModel* model_;
-    struct SearchPatternState {
-        QString lastOne_;
-        QString newOne_;
-        bool useLogicalCombining_{false};
-    }; 
-    SearchPatternState searchPattern_;
+    QString searchPattern_;
+    bool useRegexp_{ true };
+    bool useLogicalCombining_{ false };
     bool ignoreCollecting_{false};
 };
 

@@ -424,6 +424,7 @@ void CrawlerWidget::startNewSearch()
 void CrawlerWidget::updatePredefinedFiltersWidget()
 {
     predefinedFilters_->updateSearchPattern( searchLineEdit_->currentText(),
+                                             useRegexpButton_->isChecked(),
                                              booleanButton_->isChecked() );
 }
 
@@ -823,11 +824,13 @@ void CrawlerWidget::matchCaseChangedHandler( bool shouldMatchCase )
 
 void CrawlerWidget::booleanCombiningChangedHandler( bool )
 {
+    updatePredefinedFiltersWidget();
     resetStateOnSearchPatternChanges();
 }
 
 void CrawlerWidget::useRegexpChangeHandler( bool )
 {
+    updatePredefinedFiltersWidget();
     resetStateOnSearchPatternChanges();
 }
 
@@ -852,40 +855,14 @@ void CrawlerWidget::changeFilteredViewVisibility( int index )
 
 void CrawlerWidget::setSearchPatternFromPredefinedFilters( const QList<PredefinedFilter>& filters )
 {
-    QString searchPattern;
-    for ( const auto& filter : filters ) {
-        combinePatterns( searchPattern, escapeSearchPattern( filter.pattern, filter.useRegex ) );
-    }
-    setSearchPattern( searchPattern );
+    setSearchPattern( PredefinedFiltersComboBox::combineFilters(
+        filters, useRegexpButton_->isChecked(), booleanButton_->isChecked() ) );
 }
 
 QString CrawlerWidget::escapeSearchPattern( const QString& pattern, bool isRegex ) const
 {
-    auto escapedPattern = ( !isRegex && useRegexpButton_->isChecked() )
-                              ? QRegularExpression::escape( pattern )
-                              : pattern;
-
-    if ( booleanButton_->isChecked() ) {
-        escapedPattern.replace( '"', "\"" ).prepend( '"' ).append( '"' );
-    }
-
-    return escapedPattern;
-}
-
-QString& CrawlerWidget::combinePatterns( QString& currentPattern, const QString& newPattern ) const
-{
-    if ( !currentPattern.isEmpty() ) {
-        if ( booleanButton_->isChecked() ) {
-            currentPattern.append( " or " );
-        }
-        else if ( useRegexpButton_->isChecked() ) {
-            currentPattern.append( '|' );
-        }
-    }
-
-    currentPattern.append( newPattern );
-
-    return currentPattern;
+    return PredefinedFiltersComboBox::filterSearchPattern(
+        { {}, pattern, isRegex }, useRegexpButton_->isChecked(), booleanButton_->isChecked() );
 }
 
 void CrawlerWidget::addToSearch( const QString& searchString )

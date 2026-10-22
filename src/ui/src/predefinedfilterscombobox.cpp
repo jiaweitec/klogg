@@ -38,7 +38,9 @@
 
 #include "predefinedfilterscombobox.h"
 
+#include <QRegularExpression>
 #include <QStandardItemModel>
+#include <functional>
 #include <QStyledItemDelegate>
 #include <qabstractitemview.h>
 
@@ -114,55 +116,100 @@ void PredefinedFiltersComboBox::populatePredefinedFilters()
     this->setModel( model_ );
 }
 
-void PredefinedFiltersComboBox::updateSearchPattern( const QString newSearchPattern, bool useLogicalCombining )
+void PredefinedFiltersComboBox::updateSearchPattern( const QString newSearchPattern,
+                                                     bool useRegexp, bool useLogicalCombining )
 {
-    searchPattern_.newOne_ = newSearchPattern;
-    searchPattern_.useLogicalCombining_ = useLogicalCombining;
+    searchPattern_ = newSearchPattern;
+    useRegexp_ = useRegexp;
+    useLogicalCombining_ = useLogicalCombining;
+}
+
+QString PredefinedFiltersComboBox::filterSearchPattern( const PredefinedFilter& filter,
+                                                        bool useRegexp, bool useLogicalCombining )
+{
+    auto pattern = ( !filter.useRegex && useRegexp ) ? QRegularExpression::escape( filter.pattern )
+                                                      : filter.pattern;
+
+    if ( useLogicalCombining ) {
+        pattern.replace( '"', "\\\"" ).prepend( '"' ).append( '"' );
+    }
+
+    return pattern;
+}
+
+QString PredefinedFiltersComboBox::combineFilters( const QList<PredefinedFilter>& filters,
+                                                   bool useRegexp, bool useLogicalCombining )
+{
+    const QString separator = useLogicalCombining ? " or " : useRegexp ? "|" : "";
+
+    QStringList patterns;
+    for ( const auto& filter : filters ) {
+        patterns.append( filterSearchPattern( filter, useRegexp, useLogicalCombining ) );
+    }
+    return patterns.join( separator );
+}
+
+QList<int> PredefinedFiltersComboBox::matchingFilters( const QString& searchPattern,
+                                                       const QList<PredefinedFilter>& filters,
+                                                       bool useRegexp, bool useLogicalCombining )
+{
+    const QString separator = useLogicalCombining ? " or " : useRegexp ? "|" : "";
+
+    QStringList patterns;
+    for ( const auto& filter : filters ) {
+        patterns.append( filterSearchPattern( filter, useRegexp, useLogicalCombining ) );
+    }
+
+    QList<int> selected;
+    std::function<bool( int, int )> match = [ & ]( int position, int firstFilter ) {
+        for ( auto index = firstFilter; index < patterns.size(); ++index ) {
+            const auto& pattern = patterns.at( index );
+            if ( pattern.isEmpty()
+                 || QStringView{ searchPattern }.mid( position, pattern.size() ) != pattern ) {
+                continue;
+            }
+
+            selected.append( index );
+            const auto end = position + pattern.size();
+            if ( end == searchPattern.size() ) {
+                return true;
+            }
+            if ( QStringView{ searchPattern }.mid( end, separator.size() ) == separator
+                 && match( end + static_cast<int>( separator.size() ), index + 1 ) ) {
+                return true;
+            }
+            selected.removeLast();
+        }
+        return false;
+    };
+
+    if ( searchPattern.isEmpty() || !match( 0, 0 ) ) {
+        return {};
+    }
+    return selected;
 }
 
 void PredefinedFiltersComboBox::showPopup()
 {
-    if ( searchPattern_.newOne_ == searchPattern_.lastOne_ ) {
-        QComboBox::showPopup();
-        return;
-    }
-
-    searchPattern_.lastOne_ = searchPattern_.newOne_;
-
-    QString searchPattern = searchPattern_.newOne_;
-    QString delimeter( "\\|" );
-
-    if ( searchPattern_.useLogicalCombining_ ) {
-        delimeter = R"(" or ")";
-        // Remove " at the beginning and at the end
-        searchPattern = searchPattern.mid(1, searchPattern.size() - 1);
-    }
-
-    QStringList list = searchPattern.split( QRegularExpression( delimeter ) );
-
-    const auto totalRows = model_->rowCount();
-
-    ignoreCollecting_ = true;
-
-    for ( auto filterIndex = 0; filterIndex < totalRows; ++filterIndex ) {
+    QList<PredefinedFilter> filters;
+    QList<QStandardItem*> items;
+    for ( auto filterIndex = 0; filterIndex < model_->rowCount(); ++filterIndex ) {
         const auto item = model_->item( filterIndex );
         if ( item->isCheckable() ) {
-            item->setCheckState( Qt::Unchecked );
+            filters.append( { item->text(), item->data( PatternRole ).toString(),
+                              item->data( RegexRole ).toBool() } );
+            items.append( item );
         }
     }
 
-    for ( auto &l : list ) {
-        for ( auto filterIndex = 0; filterIndex < totalRows; ++filterIndex ) {
-            const auto item = model_->item( filterIndex );
-            if ( !item->isCheckable() ) {
-                continue;
-            }
-            if ( l == item->data( PatternRole ).toString() ) {
-                item->setCheckState( Qt::Checked );
-            }
-        }
-    }
+    const auto selected
+        = matchingFilters( searchPattern_, filters, useRegexp_, useLogicalCombining_ );
 
+    ignoreCollecting_ = true;
+    for ( auto index = 0; index < items.size(); ++index ) {
+        items.at( index )->setCheckState( selected.contains( index ) ? Qt::Checked
+                                                                     : Qt::Unchecked );
+    }
     ignoreCollecting_ = false;
 
     QComboBox::showPopup();

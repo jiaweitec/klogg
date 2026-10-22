@@ -37,6 +37,10 @@ cpmaddpackage(
 )
 
 if(KLOGG_USE_HYPERSCAN)
+  if(MINGW)
+    set(KLOGG_HYPERSCAN_PATCH PATCH_COMMAND git apply --ignore-whitespace
+                              ${CMAKE_CURRENT_SOURCE_DIR}/patches/hyperscan-mingw.patch)
+  endif()
   cpmaddpackage(
     NAME
     hyperscan
@@ -46,6 +50,7 @@ if(KLOGG_USE_HYPERSCAN)
     0931a40e0cf1d7f92189bc546c3491ed5c113f8b
     EXCLUDE_FROM_ALL
     YES
+    ${KLOGG_HYPERSCAN_PATCH}
   )
   message("Adding alias for hyperscan")
   add_library(klogg_hyperscan INTERFACE)

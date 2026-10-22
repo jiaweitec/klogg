@@ -1,0 +1,436 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6104769..e490557 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -347,7 +347,7 @@ CHECK_C_SOURCE_COMPILES("void *aa_test(void *x) { return __builtin_assume_aligne
+ CHECK_CXX_SOURCE_COMPILES("void *aa_test(void *x) { return __builtin_assume_aligned(x, 16);}\nint main(void) { return 0; }" HAVE_CXX_BUILTIN_ASSUME_ALIGNED)
+ CHECK_C_SOURCE_COMPILES("int main(void) { __builtin_constant_p(0); }" HAVE__BUILTIN_CONSTANT_P)
+ 
+-if (NOT WIN32)
++if (NOT MSVC)
+ set(C_FLAGS_TO_CHECK
+ # Variable length arrays are way bad, most especially at run time
+ "-Wvla"
+@@ -447,7 +447,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+     set(FREEBSD true)
+ endif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+ 
+-if(NOT WIN32)
++if(NOT MSVC)
+ if(CMAKE_C_COMPILER_ID MATCHES "Intel")
+     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -diag-error 10006 -diag-disable 68 -diag-disable 177 -diag-disable 186 -diag-disable 2304 -diag-disable 2305 -diag-disable 2338 -diag-disable 1418 -diag-disable 279 -diag-disable=remark")
+ endif()
+@@ -469,7 +469,7 @@ endif()
+ #add_subdirectory(util)
+ #add_subdirectory(doc/dev-reference)
+ 
+-if (NOT WIN32)
++if (NOT MSVC)
+ # PCRE check, we have a fixed requirement for PCRE to use Chimera
+ # and hscollider
+ set(PCRE_REQUIRED_MAJOR_VERSION 8)
+@@ -498,7 +498,7 @@ endif()
+ configure_file(${CMAKE_MODULE_PATH}/config.h.in ${PROJECT_BINARY_DIR}/config.h)
+ configure_file(src/hs_version.h.in ${PROJECT_BINARY_DIR}/hs_version.h)
+ 
+-if (NOT WIN32)
++if (NOT MSVC)
+     # expand out library names for pkgconfig static link info
+     foreach (LIB ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
+         # this is fragile, but protects us from toolchain specific files
+@@ -521,7 +521,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_C_FLAGS}")
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_CXX_FLAGS}")
+ endif()
+ 
+-if (WIN32)
++if (MSVC)
+ # PCRE check, we have a fixed requirement for PCRE to use Chimera
+ # and hscollider
+ set(PCRE_REQUIRED_MAJOR_VERSION 8)
+@@ -546,7 +546,7 @@ endif()
+ #endif()
+ endif()
+ 
+-if(NOT WIN32)
++if(NOT MSVC)
+ set(RAGEL_C_FLAGS "-Wno-unused")
+ endif()
+ 
+@@ -1432,7 +1432,7 @@ if (NOT BUILD_STATIC_LIBS)
+ endif ()
+ 
+ option(BUILD_EXAMPLES "Build Hyperscan example code (default TRUE)" TRUE)
+-if(NOT WIN32 AND BUILD_EXAMPLES)
++if(NOT MSVC AND BUILD_EXAMPLES)
+     add_subdirectory(examples)
+ endif()
+ 
+diff --git a/src/nfa/nfa_internal.h b/src/nfa/nfa_internal.h
+index ad27e28..9372a04 100644
+--- a/src/nfa/nfa_internal.h
++++ b/src/nfa/nfa_internal.h
+@@ -234,7 +234,7 @@ int isMultiTopType(u8 t) {
+ 
+ /** Macros used in place of unimplemented NFA API functions for a given
+  * engine. */
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+ 
+ /* Use for functions that return an integer. */
+ #define NFA_API_NO_IMPL(...)                                                   \
+diff --git a/src/rose/program_runtime.c b/src/rose/program_runtime.c
+index ff5a509..2dbab1d 100644
+--- a/src/rose/program_runtime.c
++++ b/src/rose/program_runtime.c
+@@ -2116,7 +2116,7 @@ hwlmcb_rv_t checkPurelyNegatives(const struct RoseEngine *t,
+     return HWLM_CONTINUE_MATCHING;
+ }
+ 
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+ #define PROGRAM_CASE(name)                                                     \
+     case ROSE_INSTR_##name: {                                                  \
+     LABEL_ROSE_INSTR_##name:                                                   \
+@@ -2178,7 +2178,7 @@ hwlmcb_rv_t roseRunProgram(const struct RoseEngine *t,
+ 
+     assert(*(const u8 *)pc != ROSE_INSTR_END);
+ 
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+     static const void *next_instr[] = {
+         &&LABEL_ROSE_INSTR_END,               //!< End of program.
+         &&LABEL_ROSE_INSTR_ANCHORED_DELAY,    //!< Delay until after anchored matcher.
+diff --git a/src/rose/rose_build_merge.cpp b/src/rose/rose_build_merge.cpp
+index 5066dbd..d296ca8 100644
+--- a/src/rose/rose_build_merge.cpp
++++ b/src/rose/rose_build_merge.cpp
+@@ -1437,7 +1437,7 @@ void mergeLeftfixesVariableLag(RoseBuildImpl &build) {
+ 
+         assert(!parents.empty());
+ 
+-#ifndef _WIN32
++#ifndef _MSC_VER
+         engine_groups[MergeKey(left, parents)].push_back(left);
+ #else
+         // On windows, when passing MergeKey object into map 'engine_groups',
+diff --git a/src/ue2common.h b/src/ue2common.h
+index 5705af7..4e0a82b 100644
+--- a/src/ue2common.h
++++ b/src/ue2common.h
+@@ -46,7 +46,7 @@
+ #include <stdint.h>
+ 
+ /* ick */
+-#if defined(_WIN32)
++#if defined(_MSC_VER)
+ #define ALIGN_ATTR(x) __declspec(align(x))
+ #else
+ #define ALIGN_ATTR(x) __attribute__((aligned((x))))
+@@ -66,7 +66,7 @@ typedef signed int s32;
+ /* We append the 'a' for aligned, since these aren't common, garden variety
+  * 64 bit values. The alignment is necessary for structs on some platforms,
+  * so we don't end up performing accidental unaligned accesses. */
+-#if defined(_WIN32) && ! defined(_WIN64)
++#if defined(_MSC_VER) && ! (defined(_MSC_VER) && defined(_WIN64))
+ typedef unsigned long long ALIGN_ATTR(4) u64a;
+ typedef signed long long ALIGN_ATTR(4) s64a;
+ #else
+@@ -83,7 +83,7 @@ typedef u32 ReportID;
+ 
+ /* Shorthand for attribute to mark a function as part of our public API.
+  * Functions without this attribute will be hidden. */
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+ #define HS_PUBLIC_API     __attribute__((visibility("default")))
+ #else
+ // TODO: dllexport defines for windows
+@@ -93,14 +93,14 @@ typedef u32 ReportID;
+ #define ARRAY_LENGTH(a) (sizeof(a)/sizeof((a)[0]))
+ 
+ /** \brief Shorthand for the attribute to shut gcc about unused parameters */
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+ #define UNUSED __attribute__ ((unused))
+ #else
+ #define UNUSED
+ #endif
+ 
+ /* really_inline forces inlining always */
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+ #if defined(HS_OPTIMIZE)
+ #define really_inline inline __attribute__ ((always_inline, unused))
+ #else
+@@ -130,7 +130,7 @@ typedef u32 ReportID;
+ 
+ 
+ // We use C99-style "restrict".
+-#ifdef _WIN32
++#ifdef _MSC_VER
+ #ifdef __cplusplus
+ #define restrict
+ #else
+@@ -186,7 +186,7 @@ typedef u32 ReportID;
+ #define LIMIT_TO_AT_MOST(a, b) (*(a) = MIN(*(a),(b)))
+ #define ENSURE_AT_LEAST(a, b) (*(a) = MAX(*(a),(b)))
+ 
+-#ifndef _WIN32
++#ifndef _MSC_VER
+ #ifndef likely
+   #define likely(x)     __builtin_expect(!!(x), 1)
+ #endif
+@@ -199,7 +199,7 @@ typedef u32 ReportID;
+ #endif
+ 
+ #if !defined(RELEASE_BUILD) || defined(DEBUG)
+-#ifdef _WIN32
++#ifdef _MSC_VER
+ #define PATH_SEP '\\'
+ #else
+ #define PATH_SEP '/'
+diff --git a/src/util/arch.h b/src/util/arch.h
+index 985fec6..f9b75f1 100644
+--- a/src/util/arch.h
++++ b/src/util/arch.h
+@@ -37,11 +37,11 @@
+ #define HAVE_SSE2
+ #endif
+ 
+-#if defined(__SSE4_1__) || (defined(_WIN32) && defined(__AVX__))
++#if defined(__SSE4_1__) || (defined(_MSC_VER) && defined(__AVX__))
+ #define HAVE_SSE41
+ #endif
+ 
+-#if defined(__SSE4_2__) || (defined(_WIN32) && defined(__AVX__))
++#if defined(__SSE4_2__) || (defined(_MSC_VER) && defined(__AVX__))
+ #define HAVE_SSE42
+ #endif
+ 
+@@ -66,16 +66,16 @@
+  */
+ #if defined(__POPCNT__) ||                                                     \
+     (defined(__INTEL_COMPILER) && defined(__SSE4_2__)) ||                      \
+-    (defined(_WIN32) && defined(__AVX__))
++    (defined(_MSC_VER) && defined(__AVX__))
+ #define HAVE_POPCOUNT_INSTR
+ #endif
+ 
+-#if defined(__BMI__) || (defined(_WIN32) && defined(__AVX2__)) ||              \
++#if defined(__BMI__) || (defined(_MSC_VER) && defined(__AVX2__)) ||              \
+     (defined(__INTEL_COMPILER) && defined(__AVX2__))
+ #define HAVE_BMI
+ #endif
+ 
+-#if defined(__BMI2__) || (defined(_WIN32) && defined(__AVX2__)) ||             \
++#if defined(__BMI2__) || (defined(_MSC_VER) && defined(__AVX2__)) ||             \
+     (defined(__INTEL_COMPILER) && defined(__AVX2__))
+ #define HAVE_BMI2
+ #endif
+@@ -83,7 +83,7 @@
+ /*
+  * MSVC uses a different form of inline asm
+  */
+-#if defined(_WIN32) && defined(_MSC_VER)
++#if defined(_MSC_VER) && defined(_MSC_VER)
+ #define NO_ASM
+ #endif
+ 
+diff --git a/src/util/bitutils.h b/src/util/bitutils.h
+index c545ee1..d0db53e 100644
+--- a/src/util/bitutils.h
++++ b/src/util/bitutils.h
+@@ -46,7 +46,7 @@
+ static really_inline
+ u32 clz32(u32 x) {
+     assert(x); // behaviour not defined for x == 0
+-#if defined(_WIN32)
++#if defined(_MSC_VER)
+     unsigned long r;
+     _BitScanReverse(&r, x);
+     return 31 - r;
+@@ -58,11 +58,11 @@ u32 clz32(u32 x) {
+ static really_inline
+ u32 clz64(u64a x) {
+     assert(x); // behaviour not defined for x == 0
+-#if defined(_WIN64)
++#if (defined(_MSC_VER) && defined(_WIN64))
+     unsigned long r;
+     _BitScanReverse64(&r, x);
+     return 63 - r;
+-#elif defined(_WIN32)
++#elif defined(_MSC_VER)
+     unsigned long x1 = (u32)x;
+     unsigned long x2 = (u32)(x >> 32);
+     unsigned long r;
+@@ -81,7 +81,7 @@ u32 clz64(u64a x) {
+ static really_inline
+ u32 ctz32(u32 x) {
+     assert(x); // behaviour not defined for x == 0
+-#if defined(_WIN32)
++#if defined(_MSC_VER)
+     unsigned long r;
+     _BitScanForward(&r, x);
+     return r;
+@@ -93,11 +93,11 @@ u32 ctz32(u32 x) {
+ static really_inline
+ u32 ctz64(u64a x) {
+     assert(x); // behaviour not defined for x == 0
+-#if defined(_WIN64)
++#if (defined(_MSC_VER) && defined(_WIN64))
+     unsigned long r;
+     _BitScanForward64(&r, x);
+     return r;
+-#elif defined(_WIN32)
++#elif defined(_MSC_VER)
+     unsigned long r;
+     if (_BitScanForward(&r, (u32)x)) {
+         return (u32)r;
+diff --git a/src/util/cpuid_flags.c b/src/util/cpuid_flags.c
+index c00ce58..d02699f 100644
+--- a/src/util/cpuid_flags.c
++++ b/src/util/cpuid_flags.c
+@@ -33,7 +33,7 @@
+ #include "hs_internal.h"
+ #include "util/arch.h"
+ 
+-#if !defined(_WIN32) && !defined(CPUID_H_)
++#if !defined(_MSC_VER) && !defined(CPUID_H_)
+ #include <cpuid.h>
+ #endif
+ 
+diff --git a/src/util/cpuid_flags.h b/src/util/cpuid_flags.h
+index 527c6d5..5b4c37e 100644
+--- a/src/util/cpuid_flags.h
++++ b/src/util/cpuid_flags.h
+@@ -31,7 +31,7 @@
+ 
+ #include "ue2common.h"
+ 
+-#if !defined(_WIN32) && !defined(CPUID_H_)
++#if !defined(_MSC_VER) && !defined(CPUID_H_)
+ #include <cpuid.h>
+  /* system header doesn't have a header guard */
+ #define CPUID_H_
+diff --git a/src/util/cpuid_inline.h b/src/util/cpuid_inline.h
+index b7b4245..7d9d9bb 100644
+--- a/src/util/cpuid_inline.h
++++ b/src/util/cpuid_inline.h
+@@ -32,7 +32,7 @@
+ #include "ue2common.h"
+ #include "cpuid_flags.h"
+ 
+-#if !defined(_WIN32) && !defined(CPUID_H_)
++#if !defined(_MSC_VER) && !defined(CPUID_H_)
+ #include <cpuid.h>
+ /* system header doesn't have a header guard */
+ #define CPUID_H_
+@@ -46,7 +46,7 @@ extern "C"
+ static inline
+ void cpuid(unsigned int op, unsigned int leaf, unsigned int *eax,
+            unsigned int *ebx, unsigned int *ecx, unsigned int *edx) {
+-#ifndef _WIN32
++#ifndef _MSC_VER
+     __cpuid_count(op, leaf, *eax, *ebx, *ecx, *edx);
+ #else
+     int a[4];
+@@ -95,7 +95,7 @@ void cpuid(unsigned int op, unsigned int leaf, unsigned int *eax,
+ 
+ static inline
+ u64a xgetbv(u32 op) {
+-#if defined(_WIN32) || defined(__INTEL_COMPILER)
++#if defined(_MSC_VER) || defined(__INTEL_COMPILER)
+     return _xgetbv(op);
+ #else
+     u32 a, d;
+diff --git a/src/util/dump_charclass.cpp b/src/util/dump_charclass.cpp
+index d0659a8..960e1a3 100644
+--- a/src/util/dump_charclass.cpp
++++ b/src/util/dump_charclass.cpp
+@@ -56,7 +56,7 @@ void describeChar(ostream &os, char c, enum cc_output_t out_type) {
+ 
+     const string backslash((out_type == CC_OUT_DOT ? 2 : 1), '\\');
+ 
+-#ifdef _WIN32
++#ifdef _MSC_VER
+     if (c >= 0x21 && c < 0x7F && c != '\\') {
+ #else
+     if (isgraph(c) && c != '\\') {
+diff --git a/src/util/make_unique.h b/src/util/make_unique.h
+index 2fb28d2..bb91686 100644
+--- a/src/util/make_unique.h
++++ b/src/util/make_unique.h
+@@ -35,7 +35,7 @@ using std::make_unique;
+ }
+ 
+ #if 0
+-#if (defined(_WIN32) || defined(_WIN64)) && (_MSC_VER > 1700)
++#if (defined(_MSC_VER) || (defined(_MSC_VER) && defined(_WIN64))) && (_MSC_VER > 1700)
+ // VC++ 2013 onwards has make_unique in the STL
+ #define USE_STD
+ #include <memory>
+diff --git a/src/util/multibit.h b/src/util/multibit.h
+index c3a4ba4..fe72e6f 100644
+--- a/src/util/multibit.h
++++ b/src/util/multibit.h
+@@ -1197,7 +1197,7 @@ u32 mmbit_sparse_iter_begin(const u8 *bits, u32 total_bits, u32 *idx,
+     assert(ISALIGNED_N(it_root, alignof(struct mmbit_sparse_iter)));
+ 
+     // Our state _may_ be on the stack
+-#ifndef _WIN32
++#ifndef _MSC_VER
+     assert(ISALIGNED_N(s, alignof(struct mmbit_sparse_state)));
+ #else
+     assert(ISALIGNED_N(s, 4));
+@@ -1309,7 +1309,7 @@ u32 mmbit_sparse_iter_next(const u8 *bits, u32 total_bits, u32 last_key,
+     assert(ISALIGNED_N(it_root, alignof(struct mmbit_sparse_iter)));
+ 
+     // Our state _may_ be on the stack
+-#ifndef _WIN32
++#ifndef _MSC_VER
+     assert(ISALIGNED_N(s, alignof(struct mmbit_sparse_state)));
+ #else
+     assert(ISALIGNED_N(s, 4));
+@@ -1466,7 +1466,7 @@ void mmbit_sparse_iter_unset(u8 *bits, u32 total_bits,
+     assert(ISALIGNED_N(it, alignof(struct mmbit_sparse_iter)));
+ 
+     // Our state _may_ be on the stack
+-#ifndef _WIN32
++#ifndef _MSC_VER
+     assert(ISALIGNED_N(s, alignof(struct mmbit_sparse_state)));
+ #else
+     assert(ISALIGNED_N(s, 4));
+diff --git a/src/util/simd_utils.h b/src/util/simd_utils.h
+index d1f060b..3601e47 100644
+--- a/src/util/simd_utils.h
++++ b/src/util/simd_utils.h
+@@ -33,7 +33,7 @@
+ #ifndef SIMD_UTILS
+ #define SIMD_UTILS
+ 
+-#if !defined(_WIN32) && !defined(__SSSE3__)
++#if !defined(_MSC_VER) && !defined(__SSSE3__)
+ #error SSSE3 instructions must be enabled
+ #endif
+ 
+diff --git a/src/util/unaligned.h b/src/util/unaligned.h
+index 299e567..9f69302 100644
+--- a/src/util/unaligned.h
++++ b/src/util/unaligned.h
+@@ -35,7 +35,7 @@
+ 
+ #include "ue2common.h"
+ 
+-#if !defined(_WIN32)
++#if !defined(_MSC_VER)
+ #define PACKED__MAY_ALIAS __attribute__((packed, may_alias))
+ #else
+ #define PACKED__MAY_ALIAS
+@@ -89,7 +89,7 @@ void unaligned_store_u64a(void *ptr, u64a val) {
+     struct unaligned *uptr = (struct unaligned *)ptr;
+     uptr->u = val;
+ }
+-#if defined(_WIN32)
++#if defined(_MSC_VER)
+ #pragma pack(pop)
+ #endif // win32
+ 

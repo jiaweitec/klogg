@@ -241,7 +241,7 @@ klogg::vector<Highlighter> searchPatternHighlighters( const RegularExpressionPat
 
     const auto hasConditions = pattern.hasActiveConditions();
     klogg::vector<Highlighter> highlighters;
-    if ( !hasConditions && !highlightMainPattern ) {
+    if ( !highlightMainPattern ) {
         return highlighters;
     }
 

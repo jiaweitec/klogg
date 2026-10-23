@@ -1121,7 +1121,7 @@ void AbstractLogView::paintEvent( QPaintEvent* paintEvent )
     if ( pullToFollowHeight && ( pullToFollowCache_.nb_columns_ != getNbVisibleCols() ) ) {
         LOG_DEBUG << "Drawing pull to follow bar";
         pullToFollowCache_.pixmap_
-            = drawPullToFollowBar( viewport()->width(), viewport()->devicePixelRatio() );
+            = drawPullToFollowBar( viewport()->width(), viewport()->devicePixelRatioF() );
         pullToFollowCache_.nb_columns_ = getNbVisibleCols();
     }
 
@@ -1648,11 +1648,11 @@ void AbstractLogView::updateDisplaySize()
     // Our text area cache is now invalid
     textAreaCache_.invalid_ = true;
     textAreaCache_.pixmap_ = QPixmap{
-        static_cast<int>( std::ceil( viewport()->width() * viewport()->devicePixelRatio() ) ),
+        static_cast<int>( std::ceil( viewport()->width() * viewport()->devicePixelRatioF() ) ),
         static_cast<int>( std::ceil( static_cast<int>( getNbVisibleLines().get() ) * charHeight_
-                                     * viewport()->devicePixelRatio() ) )
+                                     * viewport()->devicePixelRatioF() ) )
     };
-    textAreaCache_.pixmap_.setDevicePixelRatio( viewport()->devicePixelRatio() );
+    textAreaCache_.pixmap_.setDevicePixelRatio( viewport()->devicePixelRatioF() );
 }
 
 LineNumber AbstractLogView::getTopLine() const
@@ -2211,9 +2211,9 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
     const LineLength nbVisibleCols = getNbVisibleCols();
 
     const int paintDeviceHeight
-        = static_cast<int>( std::floor( paintDevice->height() / viewport()->devicePixelRatio() ) );
+        = static_cast<int>( std::floor( paintDevice->height() / viewport()->devicePixelRatioF() ) );
     const int paintDeviceWidth
-        = static_cast<int>( std::floor( paintDevice->width() / viewport()->devicePixelRatio() ) );
+        = static_cast<int>( std::floor( paintDevice->width() / viewport()->devicePixelRatioF() ) );
 
     const QPalette& palette = viewport()->palette();
     const HighlighterSet& highlighterSet = HighlighterSetCollection::get().currentActiveSet();

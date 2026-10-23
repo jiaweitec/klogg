@@ -37,7 +37,9 @@
  */
 
 #include "log.h"
+#include <QFont>
 #include <QtGlobal>
+#include <cstdlib>
 #include <qapplication.h>
 #include <qthreadpool.h>
 
@@ -123,6 +125,19 @@ int main( int argc, char* argv[] )
     setApplicationAttributes( config.enableQtHighDpi(), config.scaleFactorRounding() );
 
     KloggApp app( argc, argv );
+
+#if defined( Q_OS_WIN ) && QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+    NONCLIENTMETRICSW metrics{};
+    metrics.cbSize = sizeof( metrics );
+    if ( SystemParametersInfoW( SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0 ) ) {
+        const auto dc = GetDC( nullptr );
+        const auto dpi = GetDeviceCaps( dc, LOGPIXELSY );
+        ReleaseDC( nullptr, dc );
+        QFont font( QString::fromWCharArray( metrics.lfMessageFont.lfFaceName ) );
+        font.setPointSizeF( std::abs( metrics.lfMessageFont.lfHeight ) * 72.0 / dpi );
+        QApplication::setFont( font );
+    }
+#endif
 
 
     MainWindow::installLanguage( config.language() );

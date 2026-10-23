@@ -2309,12 +2309,9 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
     const auto highlightPatternMatches = Configuration::get().mainSearchHighlight();
     const auto variateHighlightPatternMatches = Configuration::get().variateMainSearchHighlight();
 
-    klogg::vector<Highlighter> patternHighlighters;
-    if ( highlightPatternMatches ) {
-        patternHighlighters
-            = searchPatternHighlighters( searchPattern_, Configuration::get().mainSearchBackColor(),
-                                         variateHighlightPatternMatches );
-    }
+    const auto patternHighlighters
+        = searchPatternHighlighters( searchPattern_, Configuration::get().mainSearchBackColor(),
+                                     highlightPatternMatches, variateHighlightPatternMatches );
 
     klogg::vector<Highlighter> additionalHighlighters;
     for ( auto i = 0u; i < quickHighlighters_.size(); ++i ) {

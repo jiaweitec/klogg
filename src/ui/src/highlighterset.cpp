@@ -232,6 +232,7 @@ bool Highlighter::matchLine( const QString& line, klogg::vector<HighlightedMatch
 
 klogg::vector<Highlighter> searchPatternHighlighters( const RegularExpressionPattern& pattern,
                                                      const QColor& mainBackColor,
+                                                     bool highlightMainPattern,
                                                      bool variateColors )
 {
     static const std::array<QColor, 6> ConditionColors
@@ -240,10 +241,14 @@ klogg::vector<Highlighter> searchPatternHighlighters( const RegularExpressionPat
 
     const auto hasConditions = pattern.hasActiveConditions();
     klogg::vector<Highlighter> highlighters;
+    if ( !hasConditions && !highlightMainPattern ) {
+        return highlighters;
+    }
+
     for ( const auto& include : pattern.includePatterns() ) {
         const auto index = highlighters.size();
-        const auto backColor
-            = index == 0 ? mainBackColor : ConditionColors[ ( index - 1 ) % ConditionColors.size() ];
+        const auto backColor = hasConditions ? ConditionColors[ index % ConditionColors.size() ]
+                                             : mainBackColor;
         Highlighter highlighter{ include.pattern, !include.isCaseSensitive, true, Qt::black,
                                  backColor };
         highlighter.setUseRegex( !include.isPlainText );

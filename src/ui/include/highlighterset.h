@@ -118,6 +118,7 @@ class Highlighter {
 
 klogg::vector<Highlighter> searchPatternHighlighters( const RegularExpressionPattern& pattern,
                                                      const QColor& mainBackColor,
+                                                     bool highlightMainPattern,
                                                      bool variateColors );
 
 enum class HighlighterMatchType { NoMatch, WordMatch, LineMatch };

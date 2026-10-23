@@ -594,7 +594,11 @@ class Configuration final : public Persistable<Configuration> {
     bool enableQtHighDpi_ = true;
     bool useBoldFont_ = false;
 
+#if defined( Q_OS_WIN ) && QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+    int scaleFactorRounding_ = 5;
+#else
     int scaleFactorRounding_ = 1;
+#endif
 
     RegexpEngine regexpEngine_ = RegexpEngine::Hyperscan;
 

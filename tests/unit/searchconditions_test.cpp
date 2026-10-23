@@ -131,9 +131,10 @@ SCENARIO( "Search conditions highlight matched parts", "[searchconditions]" )
           { "unused", false, false } },
         "main" );
 
-    const auto highlighters = searchPatternHighlighters( pattern, mainColor, false );
+    const auto highlighters = searchPatternHighlighters( pattern, mainColor, false, false );
     REQUIRE( highlighters.size() == 3 );
-    REQUIRE( highlighters[ 0 ].backColor() == mainColor );
+    REQUIRE( highlighters[ 0 ].backColor() != mainColor );
+    REQUIRE( highlighters[ 0 ].backColor() != QColor( Qt::white ) );
     REQUIRE( highlighters[ 1 ].backColor() != highlighters[ 0 ].backColor() );
     REQUIRE( highlighters[ 2 ].backColor() != highlighters[ 1 ].backColor() );
 
@@ -161,8 +162,18 @@ SCENARIO( "Search conditions highlight matched parts", "[searchconditions]" )
     {
         auto booleanPattern = conditionsPattern( { { "disk", false, true } }, "\"main\"" );
         booleanPattern.isBoolean = true;
-        const auto booleanHighlighters = searchPatternHighlighters( booleanPattern, mainColor, false );
+        const auto booleanHighlighters = searchPatternHighlighters( booleanPattern, mainColor, false, false );
         REQUIRE( booleanHighlighters.size() == 1 );
         REQUIRE( booleanHighlighters[ 0 ].pattern() == "disk" );
+    }
+
+    GIVEN( "Main pattern without conditions" )
+    {
+        const auto mainOnly = conditionsPattern( {}, "main" );
+        REQUIRE( searchPatternHighlighters( mainOnly, mainColor, false, false ).empty() );
+
+        const auto mainHighlighters = searchPatternHighlighters( mainOnly, mainColor, true, false );
+        REQUIRE( mainHighlighters.size() == 1 );
+        REQUIRE( mainHighlighters[ 0 ].backColor() == mainColor );
     }
 }
